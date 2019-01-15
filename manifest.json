@@ -1,0 +1,36 @@
+{
+    "Actions": [
+        {
+            "Icon": "actionIcon",
+            "Name": "Select Output",
+            "States": [
+                {
+                    "Name": "Headphones",
+                    "Image": "actionHeadphones"
+                },
+                {
+                    "Name": "Speakers",
+                    "Image": "actionSpeaker"
+                }
+            ],
+            "SupportedInMultiActions": true,
+            "Tooltip": "Switch between speakers and headphones",
+            "UUID": "io.github.mdonoughe.sbzdeck.selectOutput"
+        }
+    ],
+    "Author": "Matthew Donoughe <mdonoughe@gmail.com>",
+    "Category": "sbzdeck",
+    "CategoryIcon": "categoryIcon",
+    "CodePathWin": "target\\i686-pc-windows-msvc\\debug\\sbzdeck.exe",
+    "Description": "Control Creative Sound Blaster devices",
+    "Name": "sbzdeck",
+    "Icon": "actionSpeaker",
+    "URL": "https://github.com/mdonoughe/sbzdeck/",
+    "Version": "0.1.0",
+    "OS": [
+        {
+            "Platform": "windows",
+            "MinimumVersion": "10"
+        }
+    ]
+}

@@ -1,0 +1,10 @@
+language: rust
+cache: cargo
+
+matrix:
+  include:
+    - env: TARGET=i686-pc-windows-msvc
+      os: windows
+
+script:
+  - cargo build --verbose

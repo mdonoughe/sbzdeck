@@ -1,0 +1,25 @@
+{
+    "profiles": {
+        "headphones": {
+            "volume": 0.09,
+            "parameters": {
+                "EfxMasterControl": {
+                    "THXEfx Master OnOff": false
+                }
+            }
+        },
+        "speakers": {
+            "volume": 0.69,
+            "parameters": {
+                "EfxMasterControl": {
+                    "THXEfx Master OnOff": true
+                }
+            }
+        }
+    },
+    "selected_parameters": {
+        "EfxMasterControl": [
+            "THXEfx Master OnOff"
+        ]
+    }
+}

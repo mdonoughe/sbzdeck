@@ -1,0 +1,100 @@
+use crate::types::*;
+use indexmap::IndexMap;
+use sbz_switch::soundcore::SoundCoreParamValue;
+use serde_derive::{Deserialize, Serialize};
+use std::env;
+use std::fs::File;
+
+#[derive(Default, Deserialize, Serialize)]
+pub struct SerdeProfile {
+    pub volume: Option<f32>,
+    #[serde(default)]
+    pub parameters: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Default, Deserialize, Serialize)]
+pub struct SerdeProfiles {
+    #[serde(default)]
+    pub headphones: SerdeProfile,
+    #[serde(default)]
+    pub speakers: SerdeProfile,
+}
+
+#[derive(Default, Deserialize, Serialize)]
+pub struct SerdeCardSettings {
+    #[serde(default)]
+    pub selected_parameters: serde_json::Map<String, serde_json::Value>,
+    #[serde(default)]
+    pub profiles: SerdeProfiles,
+}
+
+fn convert_to_soundcore(
+    value: serde_json::Map<String, serde_json::Value>,
+) -> IndexMap<String, IndexMap<String, SoundCoreParamValue>> {
+    value
+        .into_iter()
+        .filter_map(|(name, params)| match params {
+            serde_json::Value::Object(params) => Some((
+                name,
+                params
+                    .into_iter()
+                    .filter_map(|(name, value)| match value {
+                        serde_json::Value::Number(n) => match n.as_i64() {
+                            Some(n) if n < i64::from(i32::min_value()) => None,
+                            Some(n) if n <= i64::from(i32::max_value()) => {
+                                Some((name, SoundCoreParamValue::I32(n as i32)))
+                            }
+                            Some(n) if n <= i64::from(u32::max_value()) => {
+                                Some((name, SoundCoreParamValue::U32(n as u32)))
+                            }
+                            Some(_) => None,
+                            None => {
+                                Some((name, SoundCoreParamValue::Float(n.as_f64().unwrap() as f32)))
+                            }
+                        },
+                        serde_json::Value::Bool(b) => Some((name, SoundCoreParamValue::Bool(b))),
+                        _ => None,
+                    })
+                    .collect(),
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
+pub fn load() -> Result<CardSettings, serde_json::Error> {
+    let mut path = env::current_exe().unwrap_or_default();
+    path.pop();
+    path.push("sbzdeck.json");
+    let file = File::open(path).map_err(serde_json::Error::io)?;
+    let de: SerdeCardSettings = serde_json::from_reader(file)?;
+    Ok(CardSettings {
+        selected_parameters: de
+            .selected_parameters
+            .into_iter()
+            .filter_map(|(name, params)| match params {
+                serde_json::Value::Array(params) => Some((
+                    name,
+                    params
+                        .into_iter()
+                        .filter_map(|param| match param {
+                            serde_json::Value::String(param) => Some(param),
+                            _ => None,
+                        })
+                        .collect(),
+                )),
+                _ => None,
+            })
+            .collect(),
+        profiles: Profiles {
+            headphones: Profile {
+                volume: de.profiles.headphones.volume,
+                parameters: convert_to_soundcore(de.profiles.headphones.parameters),
+            },
+            speakers: Profile {
+                volume: de.profiles.speakers.volume,
+                parameters: convert_to_soundcore(de.profiles.speakers.parameters),
+            },
+        },
+    })
+}
