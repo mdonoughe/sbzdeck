@@ -42,3 +42,7 @@ The parameters subsection contains the Sound Blaster settings. You can use the [
 These are the parameters that are applied when switching outputs. You can use the [sbz-switch](https://github.com/mdonoughe/sbz-switch/) dump command to find settings you want.
 
 The sound volume is always applied.
+
+## Icons
+
+The shapes in the icons come from the [Material Design Icon Library](https://material.io/tools/icons/). The style of the key icons is supposed to look like Creative's icons.
