@@ -1,4 +1,4 @@
-# streamdeck-rs
+# sbzdeck
 
 > [Stream Deck](https://www.elgato.com/en/gaming/stream-deck) plugin for controlling [Sound Blaster](https://www.soundblaster.com/products/soundcards) cards
 
