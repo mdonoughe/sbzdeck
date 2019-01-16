@@ -5,6 +5,8 @@ matrix:
   include:
     - env: TARGET=i686-pc-windows-msvc
       os: windows
+      before_script:
+        - rustup target add i686-pc-windows-msvc
 
 script:
   - cargo build --verbose
