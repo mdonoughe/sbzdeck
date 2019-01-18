@@ -20,13 +20,10 @@ mod types;
 use crate::types::*;
 use futures::prelude::*;
 use futures::sync::mpsc;
-use indexmap::IndexMap;
-use sbz_switch::soundcore::SoundCoreParamValue;
-use sbz_switch::{Configuration, EndpointConfiguration};
 use slog::{crit, debug, error, info, warn, Logger};
 use std::collections::BTreeSet;
+use std::env;
 use std::sync::{Arc, Mutex};
-use std::{env, iter};
 use streamdeck_rs::registration::RegistrationParams;
 use streamdeck_rs::socket::{ConnectError, StreamDeckSocket};
 use streamdeck_rs::{KeyPayload, Message, MessageOut, StatePayload};
@@ -90,7 +87,17 @@ fn handle_press(logger: &Logger, state: &State, context: &str, payload: &KeyPayl
     let mut state = state.lock().unwrap();
     // save back current state
     //TODO: save to disk
-    //TODO: remove after implementing monitoring?
+    // Why update the state right before switching even if events are being
+    // monitored? Changes to the device state are not atomic, so if the user
+    // manually switches from headphones to speakers, we don't want to
+    // immediately overwrite all the speaker settings with the headphone
+    // settings. Therefore, only *changed* settings are saved into our active
+    // profile. However, the purpose of this plugin is to remember audio
+    // settings when switching outputs, so it seems wrong if the user can switch
+    // to speakers manually, toggle twice, and not have the same settings as
+    // before toggling. This means pressing the toggle key basically acts as
+    // confirmation that the current settings are desired settings in the case
+    // where we are not sure.
     match sb::get_current_profile(&logger) {
         Ok(Some((current_device_output, current_device_profile))) => {
             info!(
@@ -115,37 +122,12 @@ fn handle_press(logger: &Logger, state: &State, context: &str, payload: &KeyPayl
         ),
     }
 
-    let profile = &state.profiles[output];
-
-    let mut creative: IndexMap<String, IndexMap<String, SoundCoreParamValue>> = iter::once((
-        "Device Control".to_owned(),
-        iter::once((
-            "SelectOutput".to_owned(),
-            SoundCoreParamValue::U32(u32::from(desired_state)),
-        ))
-        .collect(),
-    ))
-    .collect();
-
-    for (name, feature) in state.selected_parameters.iter() {
-        if let Some(feature_in) = profile.parameters.get(name) {
-            let feature_out = creative.entry(name.to_owned()).or_default();
-            for name in feature {
-                if let Some(value) = feature_in.get(name) {
-                    feature_out.insert(name.to_owned(), value.clone());
-                }
-            }
-        }
-    }
-
-    let configuration = Configuration {
-        endpoint: Some(EndpointConfiguration {
-            volume: profile.volume,
-        }),
-        creative: Some(creative),
-    };
-    let result = sbz_switch::set(&logger, None, &configuration, true);
-    match result {
+    match sb::apply_profile(
+        logger,
+        output,
+        &state.profiles[output],
+        &state.selected_parameters,
+    ) {
         Ok(_) => {
             state.output = Some(output);
             debug!(logger, "Set output to {}", desired_state);
@@ -272,6 +254,57 @@ fn main() {
 
     let state = Arc::new(Mutex::new(state));
 
+    let state_events = state.clone();
+    let logger_events = logger.clone();
+    let events = sb::watch(&logger).unwrap().for_each(move |evt| {
+        let evt = evt.unwrap();
+        debug!(logger_events, "saw change: {:?}", evt);
+        let mut state = state_events.lock().unwrap();
+        if &evt.feature == "Device Control" && &evt.parameter == "SelectOutput" {
+            match Output::try_from(&evt.value) {
+                Some(output) => {
+                    state.output = Some(output);
+                    for context in state.contexts.iter() {
+                        let logger_e = logger_events.clone();
+                        tokio::spawn(
+                            state
+                                .out
+                                .clone()
+                                .send(MessageOut::SetState {
+                                    context: context.to_owned(),
+                                    payload: StatePayload {
+                                        state: output.into(),
+                                    },
+                                })
+                                .map_err(move |e| {
+                                    error!(logger_e, "failed to queue message: {:?}", e)
+                                })
+                                .map(|_| ()),
+                        );
+                    }
+                }
+                None => {
+                    warn!(
+                        logger_events,
+                        "output device changed to unrecognized value {:?}", evt.value
+                    );
+                    state.output = None;
+                }
+            }
+        } else if let Some(output) = state.output {
+            // Why update the profile here if we update the profile again right
+            // before switching? If the user changes a setting and then
+            // manually switches outputs, we want to capture that setting for
+            // the next time the user switches back to the original output.
+            let feature = state.profiles[output]
+                .parameters
+                .entry(evt.feature)
+                .or_default();
+            feature.insert(evt.parameter, evt.value);
+        }
+        Ok(())
+    });
+
     let logger_e = logger.clone();
     let test = connect()
         .map_err(move |e| crit!(logger_e, "connection failed {:?}", e))
@@ -294,6 +327,9 @@ fn main() {
                     handle_message(&logger, &message, &state)
                 })
         });
-    //TODO: monitor for changes
-    tokio::run(test.map_err(|e| panic!("{:?}", e)));
+    tokio::run(
+        Future::select(events, test.map_err(|e| panic!("{:?}", e)))
+            .map(|_| ())
+            .map_err(|_| ()),
+    );
 }
