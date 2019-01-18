@@ -147,6 +147,7 @@ fn handle_press(logger: &Logger, state: &State, context: &str, payload: &KeyPayl
     let result = sbz_switch::set(&logger, None, &configuration, true);
     match result {
         Ok(_) => {
+            state.output = Some(output);
             debug!(logger, "Set output to {}", desired_state);
             let logger_e = logger.clone();
             tokio::spawn(
