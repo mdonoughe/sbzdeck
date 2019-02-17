@@ -114,8 +114,10 @@ pub fn watch(logger: &Logger) -> Result<mpsc::Receiver<Result<ChangeEvent, Win32
                             event_tx.send(event).unwrap();
                         }
                         Ok(SoundCoreOrVolumeEvent::Volume(VolumeNotification {
-                            volume, ..
-                        })) => event_tx.send(Ok(ChangeEvent::Volume(volume))).unwrap(),
+                            volume,
+                            is_muted,
+                            ..
+                        })) if !is_muted => event_tx.send(Ok(ChangeEvent::Volume(volume))).unwrap(),
                         Ok(_) => {}
                         Err(error) => event_tx.send(Err(error)).unwrap(),
                     }
