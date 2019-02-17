@@ -20,6 +20,7 @@ mod types;
 use crate::types::*;
 use futures::prelude::*;
 use futures::sync::mpsc;
+use sb::ChangeEvent;
 use slog::{crit, debug, error, info, warn, Logger};
 use std::collections::BTreeSet;
 use std::env;
@@ -260,47 +261,59 @@ fn main() {
         let evt = evt.unwrap();
         debug!(logger_events, "saw change: {:?}", evt);
         let mut state = state_events.lock().unwrap();
-        if &evt.feature == "Device Control" && &evt.parameter == "SelectOutput" {
-            match Output::try_from(&evt.value) {
-                Some(output) => {
-                    state.output = Some(output);
-                    for context in state.contexts.iter() {
-                        let logger_e = logger_events.clone();
-                        tokio::spawn(
-                            state
-                                .out
-                                .clone()
-                                .send(MessageOut::SetState {
-                                    context: context.to_owned(),
-                                    payload: StatePayload {
-                                        state: output.into(),
-                                    },
-                                })
-                                .map_err(move |e| {
-                                    error!(logger_e, "failed to queue message: {:?}", e)
-                                })
-                                .map(|_| ()),
+        match evt {
+            ChangeEvent::SoundCore(ref evt)
+                if evt.feature == "Device Control" && evt.parameter == "SelectOutput" =>
+            {
+                match Output::try_from(&evt.value) {
+                    Some(output) => {
+                        state.output = Some(output);
+                        for context in state.contexts.iter() {
+                            let logger_e = logger_events.clone();
+                            tokio::spawn(
+                                state
+                                    .out
+                                    .clone()
+                                    .send(MessageOut::SetState {
+                                        context: context.to_owned(),
+                                        payload: StatePayload {
+                                            state: output.into(),
+                                        },
+                                    })
+                                    .map_err(move |e| {
+                                        error!(logger_e, "failed to queue message: {:?}", e)
+                                    })
+                                    .map(|_| ()),
+                            );
+                        }
+                    }
+                    None => {
+                        warn!(
+                            logger_events,
+                            "output device changed to unrecognized value {:?}", evt.value
                         );
+                        state.output = None;
                     }
                 }
-                None => {
-                    warn!(
-                        logger_events,
-                        "output device changed to unrecognized value {:?}", evt.value
-                    );
-                    state.output = None;
+            }
+            ChangeEvent::SoundCore(evt) => {
+                if let Some(output) = state.output {
+                    // Why update the profile here if we update the profile again right
+                    // before switching? If the user changes a setting and then
+                    // manually switches outputs, we want to capture that setting for
+                    // the next time the user switches back to the original output.
+                    let feature = state.profiles[output]
+                        .parameters
+                        .entry(evt.feature)
+                        .or_default();
+                    feature.insert(evt.parameter, evt.value);
                 }
             }
-        } else if let Some(output) = state.output {
-            // Why update the profile here if we update the profile again right
-            // before switching? If the user changes a setting and then
-            // manually switches outputs, we want to capture that setting for
-            // the next time the user switches back to the original output.
-            let feature = state.profiles[output]
-                .parameters
-                .entry(evt.feature)
-                .or_default();
-            feature.insert(evt.parameter, evt.value);
+            ChangeEvent::Volume(volume) => {
+                if let Some(output) = state.output {
+                    state.profiles[output].volume = Some(volume);
+                }
+            }
         }
         Ok(())
     });

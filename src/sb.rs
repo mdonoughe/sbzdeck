@@ -2,8 +2,9 @@ use crate::types::*;
 use futures::prelude::*;
 use futures::sync::{mpsc, oneshot};
 use indexmap::{IndexMap, IndexSet};
+use sbz_switch::media::VolumeNotification;
 use sbz_switch::soundcore::{SoundCoreEvent, SoundCoreParamValue};
-use sbz_switch::{Configuration, EndpointConfiguration, Win32Error};
+use sbz_switch::{Configuration, EndpointConfiguration, SoundCoreOrVolumeEvent, Win32Error};
 use slog::error;
 use slog::Logger;
 use std::{iter, thread};
@@ -74,7 +75,13 @@ pub fn apply_profile(
 }
 
 #[derive(Debug)]
-pub struct ChangeEvent {
+pub enum ChangeEvent {
+    SoundCore(SoundCoreChangeEvent),
+    Volume(f32),
+}
+
+#[derive(Debug)]
+pub struct SoundCoreChangeEvent {
     pub feature: String,
     pub parameter: String,
     pub value: SoundCoreParamValue,
@@ -85,24 +92,30 @@ pub fn watch(logger: &Logger) -> Result<mpsc::Receiver<Result<ChangeEvent, Win32
     let logger = logger.clone();
     thread::Builder::new()
         .name("event thread".into())
-        .spawn(move || match sbz_switch::watch(&logger, None) {
+        .spawn(move || match sbz_switch::watch_with_volume(&logger, None) {
             Ok(iterator) => {
                 let (event_tx, event_rx) = mpsc::channel(64);
                 start_tx.send(Ok(event_rx)).unwrap();
                 let mut event_tx = event_tx.wait();
                 for event in iterator {
                     match event {
-                        Ok(SoundCoreEvent::ParamChange { feature, parameter }) => {
+                        Ok(SoundCoreOrVolumeEvent::SoundCore(SoundCoreEvent::ParamChange {
+                            feature,
+                            parameter,
+                        })) => {
                             let event = match parameter.get() {
-                                Ok(value) => Ok(ChangeEvent {
+                                Ok(value) => Ok(ChangeEvent::SoundCore(SoundCoreChangeEvent {
                                     feature: feature.description.to_owned(),
                                     parameter: parameter.description.to_owned(),
                                     value,
-                                }),
+                                })),
                                 Err(error) => Err(error),
                             };
                             event_tx.send(event).unwrap();
                         }
+                        Ok(SoundCoreOrVolumeEvent::Volume(VolumeNotification {
+                            volume, ..
+                        })) => event_tx.send(Ok(ChangeEvent::Volume(volume))).unwrap(),
                         Ok(_) => {}
                         Err(error) => event_tx.send(Err(error)).unwrap(),
                     }
