@@ -69,10 +69,9 @@ impl IndexMut<Output> for Profiles {
 
 pub struct RawState {
     pub output: Option<Output>,
-    pub selected_parameters: IndexMap<String, IndexSet<String>>,
     pub contexts: BTreeSet<String>,
     pub out: mpsc::Sender<MessageOut<Empty, Empty>>,
-    pub profiles: Profiles,
+    pub settings: CardSettings,
 }
 
 pub type State = Arc<Mutex<RawState>>;

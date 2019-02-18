@@ -98,3 +98,75 @@ pub fn load() -> Result<CardSettings, serde_json::Error> {
         },
     })
 }
+
+fn convert_from_soundcore(
+    value: &IndexMap<String, IndexMap<String, SoundCoreParamValue>>,
+) -> serde_json::Map<String, serde_json::Value> {
+    value
+        .into_iter()
+        .map(|(name, params)| {
+            (
+                name.to_string(),
+                serde_json::Value::Object(
+                    params
+                        .into_iter()
+                        .filter_map(|(name, value)| match value {
+                            SoundCoreParamValue::I32(n) => {
+                                Some((name.to_string(), serde_json::Value::Number((*n).into())))
+                            }
+                            SoundCoreParamValue::U32(n) => {
+                                Some((name.to_string(), serde_json::Value::Number((*n).into())))
+                            }
+                            SoundCoreParamValue::Float(n) => {
+                                serde_json::Number::from_f64((*n).into())
+                                    .map(|v| (name.to_string(), serde_json::Value::Number(v)))
+                            }
+                            SoundCoreParamValue::Bool(b) => {
+                                Some((name.to_string(), serde_json::Value::Bool(*b)))
+                            }
+                            _ => None,
+                        })
+                        .collect(),
+                ),
+            )
+        })
+        .collect()
+}
+
+pub fn prepare_for_save(settings: &CardSettings) -> SerdeCardSettings {
+    SerdeCardSettings {
+        selected_parameters: settings
+            .selected_parameters
+            .iter()
+            .map(|(name, params)| {
+                (
+                    name.to_string(),
+                    serde_json::Value::Array(
+                        params
+                            .iter()
+                            .map(|param| serde_json::Value::String(param.to_string()))
+                            .collect(),
+                    ),
+                )
+            })
+            .collect(),
+        profiles: SerdeProfiles {
+            headphones: SerdeProfile {
+                volume: settings.profiles.headphones.volume,
+                parameters: convert_from_soundcore(&settings.profiles.headphones.parameters),
+            },
+            speakers: SerdeProfile {
+                volume: settings.profiles.speakers.volume,
+                parameters: convert_from_soundcore(&settings.profiles.speakers.parameters),
+            },
+        },
+    }
+}
+
+pub fn save(settings: &SerdeCardSettings) -> Result<(), serde_json::Error> {
+    let mut path = env::current_exe().unwrap_or_default();
+    path.pop();
+    path.push("sbzdeck.json");
+    let file = File::create(path).map_err(serde_json::Error::io)?;
+    serde_json::to_writer_pretty(file, settings)
+}

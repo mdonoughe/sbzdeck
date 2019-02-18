@@ -75,7 +75,13 @@ fn handle_remove_action(state: &State, context: &str) {
     state.contexts.remove(context);
 }
 
-fn handle_press(logger: &Logger, state: &State, context: &str, payload: &KeyPayload<Empty>) {
+fn handle_press(
+    logger: &Logger,
+    state: &State,
+    context: &str,
+    payload: &KeyPayload<Empty>,
+    trigger_save: &mut mpsc::Sender<()>,
+) {
     let desired_state = payload
         .user_desired_state
         .unwrap_or_else(|| (payload.state + 1) % 2);
@@ -87,7 +93,6 @@ fn handle_press(logger: &Logger, state: &State, context: &str, payload: &KeyPayl
 
     let mut state = state.lock().unwrap();
     // save back current state
-    //TODO: save to disk
     // Why update the state right before switching even if events are being
     // monitored? Changes to the device state are not atomic, so if the user
     // manually switches from headphones to speakers, we don't want to
@@ -109,7 +114,8 @@ fn handle_press(logger: &Logger, state: &State, context: &str, payload: &KeyPayl
                 // this should only happen with multiactions after implementing monitoring
                 return;
             }
-            state.profiles[current_device_output] = current_device_profile;
+            state.settings.profiles[current_device_output] = current_device_profile;
+            let _ = trigger_save.try_send(());
         }
         Ok(None) => {
             error!(
@@ -126,8 +132,8 @@ fn handle_press(logger: &Logger, state: &State, context: &str, payload: &KeyPayl
     match sb::apply_profile(
         logger,
         output,
-        &state.profiles[output],
-        &state.selected_parameters,
+        &state.settings.profiles[output],
+        &state.settings.selected_parameters,
     ) {
         Ok(_) => {
             state.output = Some(output);
@@ -168,6 +174,7 @@ fn handle_message(
     logger: &Logger,
     message: &Message<Empty, Empty>,
     state: &State,
+    trigger_save: &mut mpsc::Sender<()>,
 ) -> Result<(), ()> {
     match &message {
         Message::WillAppear {
@@ -186,7 +193,9 @@ fn handle_message(
             context,
             payload,
             ..
-        } if action == ACTION_SELECT_OUTPUT => handle_press(logger, state, context, payload),
+        } if action == ACTION_SELECT_OUTPUT => {
+            handle_press(logger, state, context, payload, trigger_save)
+        }
         _ => {}
     }
     Ok(())
@@ -220,26 +229,16 @@ fn main() {
     let (out_sink, out_stream) = mpsc::channel(1);
     let mut state = RawState {
         output: None,
-        selected_parameters: settings.selected_parameters,
         contexts: BTreeSet::new(),
         out: out_sink,
-        profiles: Profiles {
-            headphones: Profile {
-                volume: settings.profiles.headphones.volume,
-                parameters: settings.profiles.headphones.parameters,
-            },
-            speakers: Profile {
-                volume: settings.profiles.speakers.volume,
-                parameters: settings.profiles.speakers.parameters,
-            },
-        },
+        settings,
     };
 
     match sb::get_current_profile(&logger) {
         Ok(Some((output, profile))) => {
             info!(logger, "detected current output to be {:?}", output);
             state.output = Some(output);
-            state.profiles[output] = profile;
+            state.settings.profiles[output] = profile;
         }
         Ok(None) => {
             error!(
@@ -255,8 +254,22 @@ fn main() {
 
     let state = Arc::new(Mutex::new(state));
 
+    let (mut trigger_save, save_trigger) = mpsc::channel(1);
+    let state_save = state.clone();
+    let save_log = logger.clone();
+    let save = save_trigger.for_each(move |_| {
+        debug!(save_log, "saving…");
+        let settings = { settings::prepare_for_save(&state_save.lock().unwrap().settings) };
+        match settings::save(&settings) {
+            Ok(_) => debug!(save_log, "settings saved"),
+            Err(error) => error!(save_log, "settings could not be saved: {:?}", error),
+        }
+        Ok(())
+    });
+
     let state_events = state.clone();
     let logger_events = logger.clone();
+    let mut trigger_save_events = trigger_save.clone();
     let events = sb::watch(&logger).unwrap().for_each(move |evt| {
         let evt = evt.unwrap();
         debug!(logger_events, "saw change: {:?}", evt);
@@ -302,7 +315,7 @@ fn main() {
                     // before switching? If the user changes a setting and then
                     // manually switches outputs, we want to capture that setting for
                     // the next time the user switches back to the original output.
-                    let feature = state.profiles[output]
+                    let feature = state.settings.profiles[output]
                         .parameters
                         .entry(evt.feature)
                         .or_default();
@@ -311,10 +324,11 @@ fn main() {
             }
             ChangeEvent::Volume(volume) => {
                 if let Some(output) = state.output {
-                    state.profiles[output].volume = Some(volume);
+                    state.settings.profiles[output].volume = Some(volume);
                 }
             }
         }
+        let _ = trigger_save_events.try_send(());
         Ok(())
     });
 
@@ -337,12 +351,15 @@ fn main() {
                 .map_err(move |e| crit!(logger_e, "receive failed {:?}", e))
                 .for_each(move |message| {
                     debug!(logger, "received {:?}", message);
-                    handle_message(&logger, &message, &state)
+                    handle_message(&logger, &message, &state, &mut trigger_save)
                 })
         });
     tokio::run(
-        Future::select(events, test.map_err(|e| panic!("{:?}", e)))
-            .map(|_| ())
-            .map_err(|_| ()),
+        Future::select(
+            Future::select(save, events).map(|_| ()).map_err(|_| ()),
+            test.map(|_| ()).map_err(|e| panic!("{:?}", e)),
+        )
+        .map(|_| ())
+        .map_err(|_| ()),
     );
 }
