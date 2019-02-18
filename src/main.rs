@@ -25,9 +25,11 @@ use slog::{crit, debug, error, info, warn, Logger};
 use std::collections::BTreeSet;
 use std::env;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use streamdeck_rs::registration::RegistrationParams;
 use streamdeck_rs::socket::{ConnectError, StreamDeckSocket};
 use streamdeck_rs::{KeyPayload, Message, MessageOut, StatePayload};
+use tokio::prelude::*;
 
 const ACTION_SELECT_OUTPUT: &str = "io.github.mdonoughe.sbzdeck.selectOutput";
 
@@ -254,18 +256,20 @@ fn main() {
 
     let state = Arc::new(Mutex::new(state));
 
-    let (mut trigger_save, save_trigger) = mpsc::channel(1);
+    let (mut trigger_save, save_trigger) = mpsc::channel(0);
     let state_save = state.clone();
     let save_log = logger.clone();
-    let save = save_trigger.for_each(move |_| {
-        debug!(save_log, "saving…");
-        let settings = { settings::prepare_for_save(&state_save.lock().unwrap().settings) };
-        match settings::save(&settings) {
-            Ok(_) => debug!(save_log, "settings saved"),
-            Err(error) => error!(save_log, "settings could not be saved: {:?}", error),
-        }
-        Ok(())
-    });
+    let save = save_trigger
+        .throttle(Duration::from_secs(5))
+        .for_each(move |_| {
+            debug!(save_log, "saving…");
+            let settings = { settings::prepare_for_save(&state_save.lock().unwrap().settings) };
+            match settings::save(&settings) {
+                Ok(_) => debug!(save_log, "settings saved"),
+                Err(error) => error!(save_log, "settings could not be saved: {:?}", error),
+            }
+            Ok(())
+        });
 
     let state_events = state.clone();
     let logger_events = logger.clone();
@@ -356,7 +360,9 @@ fn main() {
         });
     tokio::run(
         Future::select(
-            Future::select(save, events).map(|_| ()).map_err(|_| ()),
+            Future::select(save.map_err(|e| panic!("{:?}", e)), events)
+                .map(|_| ())
+                .map_err(|_| ()),
             test.map(|_| ()).map_err(|e| panic!("{:?}", e)),
         )
         .map(|_| ())
