@@ -2,17 +2,15 @@ use crate::types::*;
 use indexmap::IndexMap;
 use sbz_switch::soundcore::SoundCoreParamValue;
 use serde_derive::{Deserialize, Serialize};
-use std::env;
-use std::fs::File;
 
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct SerdeProfile {
     pub volume: Option<f32>,
     #[serde(default)]
     pub parameters: serde_json::Map<String, serde_json::Value>,
 }
 
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct SerdeProfiles {
     #[serde(default)]
     pub headphones: SerdeProfile,
@@ -20,7 +18,7 @@ pub struct SerdeProfiles {
     pub speakers: SerdeProfile,
 }
 
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct SerdeCardSettings {
     #[serde(default)]
     pub selected_parameters: serde_json::Map<String, serde_json::Value>,
@@ -62,12 +60,7 @@ fn convert_to_soundcore(
         .collect()
 }
 
-pub fn load() -> Result<CardSettings, serde_json::Error> {
-    let mut path = env::current_exe().unwrap_or_default();
-    path.pop();
-    path.push("sbzdeck.json");
-    let file = File::open(path).map_err(serde_json::Error::io)?;
-    let de: SerdeCardSettings = serde_json::from_reader(file)?;
+pub fn load(de: SerdeCardSettings) -> Result<CardSettings, serde_json::Error> {
     Ok(CardSettings {
         selected_parameters: de
             .selected_parameters
@@ -161,12 +154,4 @@ pub fn prepare_for_save(settings: &CardSettings) -> SerdeCardSettings {
             },
         },
     }
-}
-
-pub fn save(settings: &SerdeCardSettings) -> Result<(), serde_json::Error> {
-    let mut path = env::current_exe().unwrap_or_default();
-    path.pop();
-    path.push("sbzdeck.json");
-    let file = File::create(path).map_err(serde_json::Error::io)?;
-    serde_json::to_writer_pretty(file, settings)
 }

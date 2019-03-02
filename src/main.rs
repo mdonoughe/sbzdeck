@@ -17,6 +17,7 @@ mod sb;
 mod settings;
 mod types;
 
+use crate::settings::SerdeCardSettings;
 use crate::types::*;
 use futures::prelude::*;
 use futures::sync::mpsc;
@@ -33,9 +34,15 @@ use tokio::prelude::*;
 
 const ACTION_SELECT_OUTPUT: &str = "io.github.mdonoughe.sbzdeck.selectOutput";
 
-fn connect() -> impl Future<Item = StreamDeckSocket<Empty, Empty, Empty>, Error = ConnectError> {
-    let params = RegistrationParams::from_args(env::args()).unwrap();
-    StreamDeckSocket::<Empty, Empty, Empty>::connect(params.port, params.event, params.uuid)
+fn connect(
+    params: &RegistrationParams,
+) -> impl Future<Item = StreamDeckSocket<SerdeCardSettings, Empty, Empty, Empty>, Error = ConnectError>
+{
+    StreamDeckSocket::<SerdeCardSettings, Empty, Empty, Empty>::connect(
+        params.port,
+        params.event.to_string(),
+        params.uuid.to_string(),
+    )
 }
 
 fn handle_new_action(logger: &Logger, state: &State, context: &str, action_state: u8) {
@@ -174,29 +181,43 @@ fn handle_press(
 
 fn handle_message(
     logger: &Logger,
-    message: &Message<Empty, Empty>,
+    message: Message<SerdeCardSettings, Empty, Empty>,
     state: &State,
     trigger_save: &mut mpsc::Sender<()>,
 ) -> Result<(), ()> {
-    match &message {
+    match message {
         Message::WillAppear {
-            action,
-            context,
-            payload,
+            ref action,
+            ref context,
+            ref payload,
             ..
         } if action == ACTION_SELECT_OUTPUT => {
-            handle_new_action(logger, state, context, payload.state)
+            handle_new_action(logger, state, &context, payload.state)
         }
         Message::WillDisappear {
-            action, context, ..
-        } if action == ACTION_SELECT_OUTPUT => handle_remove_action(state, context),
+            ref action,
+            ref context,
+            ..
+        } if action == ACTION_SELECT_OUTPUT => handle_remove_action(state, &context),
         Message::KeyUp {
-            action,
-            context,
-            payload,
+            ref action,
+            ref context,
+            ref payload,
             ..
         } if action == ACTION_SELECT_OUTPUT => {
-            handle_press(logger, state, context, payload, trigger_save)
+            handle_press(logger, state, &context, &payload, trigger_save)
+        }
+        Message::DidReceiveGlobalSettings { payload, .. } => {
+            match settings::load(payload.settings) {
+                Ok(settings) => {
+                    let mut state = state.lock().unwrap();
+                    state.settings = settings;
+                    info!(logger, "loaded settings");
+                }
+                Err(error) => {
+                    error!(logger, "error loading settings: {:?}", error);
+                }
+            }
         }
         _ => {}
     }
@@ -206,34 +227,14 @@ fn handle_message(
 fn main() {
     let logger = logger::create();
     info!(logger, "launched {:?}", env::args().collect::<Vec<_>>());
-
-    let settings = match settings::load() {
-        Ok(settings) => settings,
-        Err(error) => {
-            if error.is_io() {
-                let error = std::io::Error::from(error);
-                match error.kind() {
-                    std::io::ErrorKind::NotFound => {
-                        warn!(logger, "settings file was not found");
-                    }
-                    _ => {
-                        error!(logger, "failed to load settings: {:?}", error);
-                    }
-                }
-            } else {
-                error!(logger, "failed to load settings: {:?}", error);
-            }
-            CardSettings::default()
-        }
-    };
-    debug!(logger, "settings: {:?}", settings);
+    let params = RegistrationParams::from_args(env::args()).unwrap();
 
     let (out_sink, out_stream) = mpsc::channel(1);
     let mut state = RawState {
         output: None,
         contexts: BTreeSet::new(),
-        out: out_sink,
-        settings,
+        out: out_sink.clone(),
+        settings: CardSettings::default(),
     };
 
     match sb::get_current_profile(&logger) {
@@ -259,16 +260,27 @@ fn main() {
     let (mut trigger_save, save_trigger) = mpsc::channel(0);
     let state_save = state.clone();
     let save_log = logger.clone();
+    let save_sink = out_sink.clone();
+    let save_context = params.uuid.clone();
     let save = save_trigger
         .throttle(Duration::from_secs(5))
         .for_each(move |_| {
             debug!(save_log, "saving…");
             let settings = { settings::prepare_for_save(&state_save.lock().unwrap().settings) };
-            match settings::save(&settings) {
-                Ok(_) => debug!(save_log, "settings saved"),
-                Err(error) => error!(save_log, "settings could not be saved: {:?}", error),
-            }
-            Ok(())
+            let log = save_log.clone();
+            save_sink
+                .clone()
+                .send(MessageOut::SetGlobalSettings {
+                    context: save_context.to_string(),
+                    payload: settings,
+                })
+                .then(move |r| {
+                    match r {
+                        Ok(_) => debug!(log, "settings saved"),
+                        Err(error) => error!(log, "settings could not be saved: {:?}", error),
+                    }
+                    Ok(())
+                })
         });
 
     let state_events = state.clone();
@@ -337,7 +349,8 @@ fn main() {
     });
 
     let logger_e = logger.clone();
-    let test = connect()
+    let get_settings_context = params.uuid.clone();
+    let test = connect(&params)
         .map_err(move |e| crit!(logger_e, "connection failed {:?}", e))
         .and_then(move |s| {
             info!(logger, "connected!");
@@ -345,9 +358,14 @@ fn main() {
 
             let logger_e = logger.clone();
             tokio::spawn(
-                sink.send_all(out_stream.map_err(|_| unreachable!()))
-                    .map_err(move |e| error!(logger_e, "failed to send message: {:?}", e))
-                    .map(|_| ()),
+                stream::once(Ok(MessageOut::GetGlobalSettings {
+                    context: get_settings_context,
+                }))
+                .chain(out_stream)
+                .forward(
+                    sink.sink_map_err(move |e| error!(logger_e, "failed to send message: {:?}", e)),
+                )
+                .map(|_| ()),
             );
 
             let logger_e = logger.clone();
@@ -355,7 +373,7 @@ fn main() {
                 .map_err(move |e| crit!(logger_e, "receive failed {:?}", e))
                 .for_each(move |message| {
                     debug!(logger, "received {:?}", message);
-                    handle_message(&logger, &message, &state, &mut trigger_save)
+                    handle_message(&logger, message, &state, &mut trigger_save)
                 })
         });
     tokio::run(

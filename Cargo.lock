@@ -754,7 +754,7 @@ dependencies = [
  "serde_json 1.0.35 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog 2.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sloggers 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "streamdeck-rs 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "streamdeck-rs 0.1.0 (git+https://github.com/mdonoughe/streamdeck-rs?branch=sdk2)",
  "tokio 0.1.14 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -920,7 +920,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "streamdeck-rs"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+source = "git+https://github.com/mdonoughe/streamdeck-rs?branch=sdk2#f305467bd9b4321a2c2e7a2e491a9a44a1e847a3"
 dependencies = [
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1461,7 +1461,7 @@ dependencies = [
 "checksum sloggers 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "ca1a15430a70a22ce2b066263dc55580a90b6920b837769332d2d0844a445549"
 "checksum smallvec 0.6.7 (registry+https://github.com/rust-lang/crates.io-index)" = "b73ea3738b47563803ef814925e69be00799a8c07420be8b996f8e98fb2336db"
 "checksum stable_deref_trait 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "dba1a27d3efae4351c8051072d619e3ade2820635c3958d826bfea39d59b54c8"
-"checksum streamdeck-rs 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "35d130e77208ddfcb5fcfaf9caa2d0e37e818feffa2dea41f09c410d7ceddecf"
+"checksum streamdeck-rs 0.1.0 (git+https://github.com/mdonoughe/streamdeck-rs?branch=sdk2)" = "<none>"
 "checksum strsim 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "bb4f380125926a99e52bc279241539c018323fab05ad6368b56f93d9369ff550"
 "checksum syn 0.15.24 (registry+https://github.com/rust-lang/crates.io-index)" = "734ecc29cd36e8123850d9bf21dfd62ef8300aaa8f879aabaa899721808be37c"
 "checksum synstructure 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)" = "73687139bf99285483c96ac0add482c3776528beac1d97d444f6e91f203a2015"
