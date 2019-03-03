@@ -1,4 +1,5 @@
-use crate::settings::SerdeCardSettings;
+use common::SerdeCardSettings;
+pub use common::{FromInspector, ToInspector};
 use futures::sync::mpsc;
 use indexmap::{IndexMap, IndexSet};
 use sbz_switch::soundcore::SoundCoreParamValue;
@@ -71,7 +72,7 @@ impl IndexMut<Output> for Profiles {
 pub struct RawState {
     pub output: Option<Output>,
     pub contexts: BTreeSet<String>,
-    pub out: mpsc::Sender<MessageOut<SerdeCardSettings, Empty, Empty>>,
+    pub out: mpsc::Sender<MessageOut<SerdeCardSettings, Empty, ToInspector>>,
     pub settings: CardSettings,
 }
 

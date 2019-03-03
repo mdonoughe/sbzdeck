@@ -1,0 +1,25 @@
+[package]
+name = "plugin"
+version = "0.1.0"
+authors = ["Matthew Donoughe <mdonoughe@gmail.com>"]
+description = "Steam Deck plugin for Sound Blaster devices"
+repository = "https://github.com/mdonoughe/sbzdeck/"
+readme = "README.md"
+keywords = ["stream-deck", "sound-blaster"]
+license = "MIT/Apache-2.0"
+edition = "2018"
+
+[badges]
+travis-ci = { repository = "mdonoughe/sbzdeck" }
+
+[dependencies]
+common = { path = "../common" }
+futures = "0.1.25"
+indexmap = { version = "1.0", features = ["serde-1"] }
+sbz-switch = "3.1"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+slog = { version = "2.4", features = ["max_level_trace", "release_max_level_info"] }
+streamdeck-rs = "0.2.0"
+tokio = "0.1.14"

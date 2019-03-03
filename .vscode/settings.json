@@ -1,3 +1,6 @@
 {
-    "rust.target": "i686-pc-windows-msvc"
+    "rust.target": "i686-pc-windows-msvc",
+    "[html]": {
+        "editor.formatOnSave": false
+    }
 }

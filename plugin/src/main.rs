@@ -2,31 +2,31 @@
 compile_error!("This crate must be built for x86 for compatibility with sound drivers." +
     "(build for i686-pc-windows-msvc or suppress this error using feature ctsndcr_ignore_arch)");
 
+extern crate common;
 extern crate indexmap;
 extern crate sbz_switch;
 extern crate serde;
 extern crate serde_derive;
 extern crate serde_json;
 extern crate slog;
-extern crate sloggers;
 extern crate streamdeck_rs;
 extern crate tokio;
 
-mod logger;
 mod sb;
 mod settings;
 mod types;
 
-use crate::settings::SerdeCardSettings;
 use crate::types::*;
+use common::SerdeCardSettings;
 use futures::prelude::*;
 use futures::sync::mpsc;
 use sb::ChangeEvent;
-use slog::{crit, debug, error, info, warn, Logger};
+use slog::{crit, debug, error, info, o, warn, Drain, Logger};
 use std::collections::BTreeSet;
 use std::env;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use streamdeck_rs::logging::StreamDeckDrain;
 use streamdeck_rs::registration::RegistrationParams;
 use streamdeck_rs::socket::{ConnectError, StreamDeckSocket};
 use streamdeck_rs::{KeyPayload, Message, MessageOut, StatePayload};
@@ -36,9 +36,11 @@ const ACTION_SELECT_OUTPUT: &str = "io.github.mdonoughe.sbzdeck.selectOutput";
 
 fn connect(
     params: &RegistrationParams,
-) -> impl Future<Item = StreamDeckSocket<SerdeCardSettings, Empty, Empty, Empty>, Error = ConnectError>
-{
-    StreamDeckSocket::<SerdeCardSettings, Empty, Empty, Empty>::connect(
+) -> impl Future<
+    Item = StreamDeckSocket<SerdeCardSettings, Empty, FromInspector, ToInspector>,
+    Error = ConnectError,
+> {
+    StreamDeckSocket::<SerdeCardSettings, Empty, FromInspector, ToInspector>::connect(
         params.port,
         params.event.to_string(),
         params.uuid.to_string(),
@@ -181,7 +183,7 @@ fn handle_press(
 
 fn handle_message(
     logger: &Logger,
-    message: Message<SerdeCardSettings, Empty, Empty>,
+    message: Message<SerdeCardSettings, Empty, FromInspector>,
     state: &State,
     trigger_save: &mut mpsc::Sender<()>,
 ) -> Result<(), ()> {
@@ -219,14 +221,86 @@ fn handle_message(
                 }
             }
         }
+        Message::SendToPlugin {
+            action,
+            context,
+            payload,
+            ..
+        } => match payload {
+            FromInspector::GetFeatures => {
+                let available = sbz_switch::dump(&logger, None)
+                    .ok()
+                    .and_then(|s| s.creative)
+                    .unwrap_or_default();
+                let state = state.lock().unwrap();
+                let response = available
+                    .into_iter()
+                    .map(|(k, v)| {
+                        let feature_selection = state.settings.selected_parameters.get(&k);
+                        (
+                            k,
+                            v.into_iter()
+                                .map(|(k, _)| {
+                                    let selected = feature_selection
+                                        .map(|s| s.contains(&k))
+                                        .unwrap_or_default();
+                                    (k, selected)
+                                })
+                                .collect(),
+                        )
+                    })
+                    .collect();
+                let logger_e = logger.clone();
+                tokio::spawn(
+                    state
+                        .out
+                        .clone()
+                        .send(MessageOut::SendToPropertyInspector {
+                            action: action,
+                            context: context,
+                            payload: ToInspector::SetFeatures {
+                                selected_parameters: response,
+                            },
+                        })
+                        .map_err(move |e| error!(logger_e, "failed to queue message: {:?}", e))
+                        .map(|_| ()),
+                );
+            }
+            FromInspector::SetFeatures {
+                selected_parameters,
+            } => {
+                let available = sbz_switch::dump(&logger, None)
+                    .ok()
+                    .and_then(|s| s.creative)
+                    .unwrap_or_default();
+                let mut state = state.lock().unwrap();
+                state.settings.selected_parameters = available
+                    .into_iter()
+                    .filter_map(|(k, v)| {
+                        selected_parameters.get(&k).map(|feature_selection| {
+                            (
+                                k,
+                                v.into_iter()
+                                    .filter(|(k, _)| feature_selection.contains(k))
+                                    .map(|(k, _)| k)
+                                    .collect(),
+                            )
+                        })
+                    })
+                    .collect();
+                info!(
+                    logger,
+                    "selecting features are now {:?}", state.settings.selected_parameters
+                );
+                let _ = trigger_save.try_send(());
+            }
+        },
         _ => {}
     }
     Ok(())
 }
 
 fn main() {
-    let logger = logger::create();
-    info!(logger, "launched {:?}", env::args().collect::<Vec<_>>());
     let params = RegistrationParams::from_args(env::args()).unwrap();
 
     let (out_sink, out_stream) = mpsc::channel(1);
@@ -236,6 +310,15 @@ fn main() {
         out: out_sink.clone(),
         settings: CardSettings::default(),
     };
+
+    let (log_sink, log_stream) = mpsc::unbounded();
+    let log_task = log_stream.forward(
+        out_sink
+            .clone()
+            .sink_map_err(|error| panic!("failed to forward log: {:?}", error)),
+    );
+
+    let logger = slog::Logger::root(StreamDeckDrain::new(log_sink).fuse(), o!());
 
     match sb::get_current_profile(&logger) {
         Ok(Some((output, profile))) => {
@@ -348,10 +431,9 @@ fn main() {
         Ok(())
     });
 
-    let logger_e = logger.clone();
     let get_settings_context = params.uuid.clone();
     let test = connect(&params)
-        .map_err(move |e| crit!(logger_e, "connection failed {:?}", e))
+        .map_err(move |e| panic!("connection failed {:?}", e))
         .and_then(move |s| {
             info!(logger, "connected!");
             let (sink, stream) = s.split();
@@ -381,7 +463,12 @@ fn main() {
             Future::select(save.map_err(|e| panic!("{:?}", e)), events)
                 .map(|_| ())
                 .map_err(|_| ()),
-            test.map(|_| ()).map_err(|e| panic!("{:?}", e)),
+            Future::select(
+                log_task.map(|_| ()),
+                test.map(|_| ()).map_err(|e| panic!("{:?}", e)),
+            )
+            .map(|_| ())
+            .map_err(|_| ()),
         )
         .map(|_| ())
         .map_err(|_| ()),

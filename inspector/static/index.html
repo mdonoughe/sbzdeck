@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="css/sdpi.css">
+</head>
+
+<body>
+    <script src="elgato.js"></script>
+    <script>
+        // fetch does not work for file:// locations
+        var realFetch = window.fetch;
+        window.fetch = url => new Promise((res, rej) => {
+            let req = new XMLHttpRequest();
+            req.responseType = 'arraybuffer';
+            req.addEventListener('load', () => res({arrayBuffer: () => Promise.resolve(req.response)}));
+            req.addEventListener('error', rej);
+            req.open('GET', url);
+            req.send();
+        });
+        // WebAssembly.instantiateStreaming wants a real fetch response with streaming
+        var realInstantiateStreaming = WebAssembly.instantiateStreaming;
+        delete WebAssembly.instantiateStreaming;
+    </script>
+    <script src="inspector.js"></script>
+    <script>
+        window.fetch = realFetch;
+        WebAssembly.instantiateStreaming = realInstantiateStreaming;
+
+        function connectElgatoStreamDeckSocket(port, uuid, registerEvent, info, actionInfo) {
+            addDynamicStyles(JSON.parse(info).colors);
+
+            Rust.inspector.then(i => i.connect_elgato_stream_deck_socket.apply(null, arguments));
+        }
+    </script>
+</body>
+
+</html>

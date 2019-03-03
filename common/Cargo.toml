@@ -1,0 +1,11 @@
+[package]
+name = "common"
+version = "0.1.0"
+authors = ["Matthew Donoughe <mdonoughe@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+indexmap = { version = "1", features = ["serde-1"] }
+serde = "1"
+serde_derive = "1"
+serde_json = "1"

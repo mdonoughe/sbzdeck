@@ -1,13 +1,14 @@
 $dist = New-Item -ItemType 'Directory' -Path (Join-Path $PSScriptRoot 'dist/io.github.mdonoughe.sbzdeck.sdPlugin') -Force
 
-cargo build --release --manifest-path (Join-Path $PSScriptRoot 'Cargo.toml' | Resolve-Path).ProviderPath
-Join-Path $PSScriptRoot 'target\i686-pc-windows-msvc\release\sbzdeck.exe' | Copy-Item -Destination $dist.PSPath
-
-# temporary
-Join-Path $PSScriptRoot 'examples\sbzdeck.json' | Copy-Item -Destination $dist.PSPath
+Push-Location $PSScriptRoot
+cargo build --release -p plugin
+Get-Item target/i686-pc-windows-msvc/release/plugin.exe | Copy-Item -Destination (Join-Path $dist.PSPath 'sbzdeck.exe')
+cargo web deploy --release -o dist/io.github.mdonoughe.sbzdeck.sdPlugin/inspector -p inspector
+Pop-Location
 
 $manifest = Join-Path $PSScriptRoot 'manifest.json' | Get-Item | Get-Content | ConvertFrom-Json
 $manifest.CodePathWin = 'sbzdeck.exe'
+$manifest.PropertyInspectorPath = 'inspector/index.html'
 $manifest | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath ($dist | Join-Path -ChildPath 'manifest.json')
 
 $images = @(
