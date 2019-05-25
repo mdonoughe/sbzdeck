@@ -56,7 +56,6 @@ fn handle_new_action(logger: &Logger, state: &State, context: &str, action_state
     match output {
         Some(output) if Into::<u8>::into(output) != action_state => {
             debug!(logger, "Correcting state to {:?}", output);
-            let logger_e = logger.clone();
             let state = state.lock().unwrap();
             tokio::spawn(
                 state
@@ -68,7 +67,7 @@ fn handle_new_action(logger: &Logger, state: &State, context: &str, action_state
                             state: output.into(),
                         },
                     })
-                    .map_err(move |e| error!(logger_e, "failed to queue message: {:?}", e))
+                    .map_err(|e| panic!("failed to queue message: {:?}", e))
                     .map(|_| ()),
             );
         }
@@ -149,7 +148,6 @@ fn handle_press(
         Ok(_) => {
             state.output = Some(output);
             debug!(logger, "Set output to {}", desired_state);
-            let logger_e = logger.clone();
             tokio::spawn(
                 state
                     .out
@@ -157,7 +155,7 @@ fn handle_press(
                     .send(MessageOut::ShowOk {
                         context: context.to_string(),
                     })
-                    .map_err(move |e| error!(logger_e, "failed to queue message: {:?}", e))
+                    .map_err(|e| panic!("failed to queue message: {:?}", e))
                     .map(|_| ()),
             );
         }
@@ -166,7 +164,6 @@ fn handle_press(
                 logger,
                 "Failed to set output to {}: {:?}", desired_state, error
             );
-            let logger_e = logger.clone();
             tokio::spawn(
                 state
                     .out
@@ -174,7 +171,7 @@ fn handle_press(
                     .send(MessageOut::ShowAlert {
                         context: context.to_string(),
                     })
-                    .map_err(move |e| error!(logger_e, "failed to queue message: {:?}", e))
+                    .map_err(|e| panic!("failed to queue message: {:?}", e))
                     .map(|_| ()),
             );
         }
@@ -250,7 +247,6 @@ fn handle_message(
                         )
                     })
                     .collect();
-                let logger_e = logger.clone();
                 tokio::spawn(
                     state
                         .out
@@ -262,7 +258,7 @@ fn handle_message(
                                 selected_parameters: response,
                             },
                         })
-                        .map_err(move |e| error!(logger_e, "failed to queue message: {:?}", e))
+                        .map_err(|e| panic!("failed to queue message: {:?}", e))
                         .map(|_| ()),
                 );
             }
@@ -381,7 +377,6 @@ fn main() {
                     Some(output) => {
                         state.output = Some(output);
                         for context in state.contexts.iter() {
-                            let logger_e = logger_events.clone();
                             tokio::spawn(
                                 state
                                     .out
@@ -392,9 +387,7 @@ fn main() {
                                             state: output.into(),
                                         },
                                     })
-                                    .map_err(move |e| {
-                                        error!(logger_e, "failed to queue message: {:?}", e)
-                                    })
+                                    .map_err(|e| panic!("failed to queue message: {:?}", e))
                                     .map(|_| ()),
                             );
                         }
@@ -438,15 +431,12 @@ fn main() {
             info!(logger, "connected!");
             let (sink, stream) = s.split();
 
-            let logger_e = logger.clone();
             tokio::spawn(
                 stream::once(Ok(MessageOut::GetGlobalSettings {
                     context: get_settings_context,
                 }))
                 .chain(out_stream)
-                .forward(
-                    sink.sink_map_err(move |e| error!(logger_e, "failed to send message: {:?}", e)),
-                )
+                .forward(sink.sink_map_err(|e| panic!("failed to send message: {:?}", e)))
                 .map(|_| ()),
             );
 
