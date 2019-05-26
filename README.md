@@ -11,7 +11,7 @@ This plugin is probably only useful for a few people in the world.
 ## Requirements
 
 - Windows 10
-- Stream Deck software version 4.0.0
+- Stream Deck software version 4.1.0
 - The Sound Blaster device must be the Windows default audio output (selecting a target device is not yet supported)
 
 ## Usage
@@ -27,21 +27,7 @@ It is also possible to create a Stream Deck "multi action" which uses the plugin
 
 ## Configuration
 
-Currently, the only way to configure the plugin is by stopping the Stream Deck software, editing the `sbzdeck.json` file found in the `%APPDATA%\Elgato\StreamDeck\Plugins\io.github.mdonoughe.sbzdeck.sdPlugin` directory, and then restarting the Stream Deck software. If you try to edit the configuration while the Stream Deck software is running your settings may be overwritten.
-
-### `profiles`
-
-The profiles section contains the settings that are applied when switching between headphones and speakers.
-
-These are only the defaults values, and they are overwritten right before switching to the other output. For example, if the JSON file says the speaker volume should be 0.5, but you've adjusted the volume to 0.6, switching to headphones and then back to speakers will set the volume back to 0.6, not 0.5.
-
-The parameters subsection contains the Sound Blaster settings. Note that setting these values here sets the default values, but the settings will not be applied unless the parameter is selected in the `selected_parameters` section, because this section is constantly updated by the plugin to contain all of the active settings.
-
-### `selected_parameters`
-
-These are the parameters that are applied when switching outputs. You can use the [sbz-switch](https://github.com/mdonoughe/sbz-switch/) dump command to find settings you want.
-
-The sound volume is always applied.
+When the plugin is selected in the Stream Deck software, the property inspector in the bottom panel of the window will display a list of features and their associated parameters. Only the parameters that are checked in this list will be restored when switching inputs.
 
 ## Icons
 
