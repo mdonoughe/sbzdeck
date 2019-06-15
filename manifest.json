@@ -28,7 +28,7 @@
     "Name": "sbzdeck",
     "Icon": "actionSpeaker",
     "URL": "https://github.com/mdonoughe/sbzdeck/",
-    "Version": "0.1.0",
+    "Version": "0.1.1",
     "OS": [
         {
             "Platform": "windows",

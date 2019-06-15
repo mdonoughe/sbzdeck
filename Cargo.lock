@@ -620,7 +620,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "plugin"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "common 0.1.0",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -630,7 +630,7 @@ dependencies = [
  "serde_derive 1.0.84 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.35 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog 2.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "streamdeck-rs 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "streamdeck-rs 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.14 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -1037,7 +1037,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "streamdeck-rs"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1608,7 +1608,7 @@ dependencies = [
 "checksum stdweb-derive 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0e21ebd9179de08f2300a65454268a17ea3de204627458588c84319c4def3930"
 "checksum stdweb-internal-macros 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)" = "1635afd059cbfac7d5b1274f0c44cec110c1e013c48e8bbc22e07e52696cf887"
 "checksum stdweb-internal-runtime 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "a2a2f4a2eb556337b2d1a302630bbddf989ae383c70393e89b48152b9896cbda"
-"checksum streamdeck-rs 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "49144cc2a71cb2b8aa8dea187f84488442016fe66a23967ece16c2c6329b9891"
+"checksum streamdeck-rs 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "71291f83fc0a80aa71caac1ba30603f7226ca8ca3112c0867db9c2b508ed93fe"
 "checksum strsim 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "bb4f380125926a99e52bc279241539c018323fab05ad6368b56f93d9369ff550"
 "checksum syn 0.15.24 (registry+https://github.com/rust-lang/crates.io-index)" = "734ecc29cd36e8123850d9bf21dfd62ef8300aaa8f879aabaa899721808be37c"
 "checksum synstructure 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)" = "73687139bf99285483c96ac0add482c3776528beac1d97d444f6e91f203a2015"
