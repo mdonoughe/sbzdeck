@@ -3,7 +3,9 @@ $dist = New-Item -ItemType 'Directory' -Path (Join-Path $PSScriptRoot 'dist/io.g
 Push-Location $PSScriptRoot
 cargo build --release -p plugin
 Get-Item target/i686-pc-windows-msvc/release/plugin.exe | Copy-Item -Destination (Join-Path $dist.PSPath 'sbzdeck.exe')
-cargo web deploy --release -o dist/io.github.mdonoughe.sbzdeck.sdPlugin/inspector -p inspector
+Push-Location inspector
+cargo web deploy --release -o ../dist/io.github.mdonoughe.sbzdeck.sdPlugin/inspector
+Pop-Location
 Pop-Location
 
 $manifest = Join-Path $PSScriptRoot 'manifest.json' | Get-Item | Get-Content | ConvertFrom-Json
