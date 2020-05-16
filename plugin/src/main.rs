@@ -275,11 +275,11 @@ async fn handle_message(
     }
 }
 
-#[tokio::main]
+#[tokio::main(max_threads=1)]
 async fn main() {
     let params = &RegistrationParams::from_args(env::args()).unwrap();
 
-    let (mut out_sink, mut out_stream) = mpsc::channel(1);
+    let (mut out_sink, mut out_stream) = mpsc::channel(2);
     let mut state = RawState {
         output: None,
         contexts: BTreeSet::new(),
