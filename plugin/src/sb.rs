@@ -1,6 +1,7 @@
 use crate::types::*;
+use futures::channel::{mpsc, oneshot};
+use futures::executor;
 use futures::prelude::*;
-use futures::sync::{mpsc, oneshot};
 use indexmap::{IndexMap, IndexSet};
 use sbz_switch::media::VolumeNotification;
 use sbz_switch::soundcore::{SoundCoreEvent, SoundCoreParamValue};
@@ -43,7 +44,7 @@ pub fn apply_profile(
     output: Output,
     profile: &Profile,
     selected_parameters: &IndexMap<String, IndexSet<String>>,
-) -> Result<(), Box<std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut creative: IndexMap<String, IndexMap<String, SoundCoreParamValue>> = iter::once((
         "Device Control".to_owned(),
         iter::once((
@@ -87,16 +88,15 @@ pub struct SoundCoreChangeEvent {
     pub value: SoundCoreParamValue,
 }
 
-pub fn watch(logger: &Logger) -> Result<mpsc::Receiver<Result<ChangeEvent, Win32Error>>, ()> {
+pub async fn watch(logger: &Logger) -> Result<mpsc::Receiver<Result<ChangeEvent, Win32Error>>, ()> {
     let (start_tx, start_rx) = oneshot::channel();
     let logger = logger.clone();
     thread::Builder::new()
         .name("event thread".into())
         .spawn(move || match sbz_switch::watch_with_volume(&logger, None) {
             Ok(iterator) => {
-                let (event_tx, event_rx) = mpsc::channel(64);
+                let (mut event_tx, event_rx) = mpsc::channel(64);
                 start_tx.send(Ok(event_rx)).unwrap();
-                let mut event_tx = event_tx.wait();
                 for event in iterator {
                     match event {
                         Ok(SoundCoreOrVolumeEvent::SoundCore(SoundCoreEvent::ParamChange {
@@ -111,15 +111,18 @@ pub fn watch(logger: &Logger) -> Result<mpsc::Receiver<Result<ChangeEvent, Win32
                                 })),
                                 Err(error) => Err(error),
                             };
-                            event_tx.send(event).unwrap();
+                            executor::block_on(event_tx.send(event)).unwrap();
                         }
                         Ok(SoundCoreOrVolumeEvent::Volume(VolumeNotification {
                             volume,
                             is_muted,
                             ..
-                        })) if !is_muted => event_tx.send(Ok(ChangeEvent::Volume(volume))).unwrap(),
+                        })) if !is_muted => {
+                            executor::block_on(event_tx.send(Ok(ChangeEvent::Volume(volume))))
+                                .unwrap()
+                        }
                         Ok(_) => {}
-                        Err(error) => event_tx.send(Err(error)).unwrap(),
+                        Err(error) => executor::block_on(event_tx.send(Err(error))).unwrap(),
                     }
                 }
             }
@@ -129,5 +132,5 @@ pub fn watch(logger: &Logger) -> Result<mpsc::Receiver<Result<ChangeEvent, Win32
             }
         })
         .unwrap();
-    start_rx.wait().unwrap()
+    start_rx.await.unwrap()
 }

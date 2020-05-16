@@ -1,6 +1,6 @@
 use common::SerdeCardSettings;
 pub use common::{FromInspector, ToInspector};
-use futures::sync::mpsc;
+use futures::channel::mpsc;
 use indexmap::{IndexMap, IndexSet};
 use sbz_switch::soundcore::SoundCoreParamValue;
 use serde_derive::{Deserialize, Serialize};
