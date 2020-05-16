@@ -15,7 +15,7 @@
             ],
             "SupportedInMultiActions": true,
             "Tooltip": "Switch between speakers and headphones",
-            "UUID": "io.github.mdonoughe.sbzdeck.selectOutput"
+            "UUID": "io.github.mdonoughe.sbzdeck.selectoutput"
         }
     ],
     "SDKVersion": 2,
@@ -28,7 +28,7 @@
     "Name": "sbzdeck",
     "Icon": "actionSpeaker",
     "URL": "https://github.com/mdonoughe/sbzdeck/",
-    "Version": "0.1.1",
+    "Version": "0.1.2",
     "OS": [
         {
             "Platform": "windows",

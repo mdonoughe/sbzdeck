@@ -1,6 +1,6 @@
 [package]
 name = "plugin"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Matthew Donoughe <mdonoughe@gmail.com>"]
 description = "Steam Deck plugin for Sound Blaster devices"
 repository = "https://github.com/mdonoughe/sbzdeck/"

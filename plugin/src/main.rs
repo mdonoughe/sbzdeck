@@ -32,7 +32,7 @@ use streamdeck_rs::socket::{ConnectError, StreamDeckSocket};
 use streamdeck_rs::{KeyPayload, Message, MessageOut, StatePayload};
 use tokio::prelude::*;
 
-const ACTION_SELECT_OUTPUT: &str = "io.github.mdonoughe.sbzdeck.selectOutput";
+const ACTION_SELECT_OUTPUT: &str = "io.github.mdonoughe.sbzdeck.selectoutput";
 
 fn connect(
     params: &RegistrationParams,
