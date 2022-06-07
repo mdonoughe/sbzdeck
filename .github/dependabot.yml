@@ -1,6 +1,6 @@
 version: 2
 updates:
-  - package-ecosystem:
-    directory: "/"
+  - package-ecosystem: cargo
+    directory: /
     schedule:
-      interval: "daily"
+      interval: daily
