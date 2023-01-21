@@ -1000,9 +1000,9 @@ checksum = "ed3d612bc64430efeb3f7ee6ef26d590dce0c43249217bddc62112540c7941e1"
 
 [[package]]
 name = "sbz-switch"
-version = "4.0.0"
+version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc60a78b37835585be124f1e885f80d0e08f7ebdee92e7441b6c62e2487d0c63"
+checksum = "0fe2e084ecda573eda699401ae9bf0d0623eec2a2fde47fbe3b30dc6cdd05f14"
 dependencies = [
  "clap",
  "futures",
